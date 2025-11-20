@@ -112,7 +112,7 @@ jobs:
             --latest \
             --prerelease=false \
             --draft=false \
-            $GITHUB_OUTPUT \
+            artifacts/app.zip \
           || \
           ( \
             echo "Release 'latest' already exists. Re-creating..." && \
@@ -125,6 +125,6 @@ jobs:
               --latest \
               --prerelease=false \
               --draft=false \
-              $GITHUB_OUTPUT \
+              artifacts/app.zip \
           )
           
