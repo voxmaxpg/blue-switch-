@@ -1,9 +1,12 @@
-name: Release
+name: Release 11
 
 on:
   push:
-    branches: [main]
-
+    branches:
+      - main
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  
 jobs:
   version:
     runs-on: ubuntu-latest
@@ -42,6 +45,9 @@ jobs:
   build:
     needs: version
     runs-on: macos-15-intel # Using the latest runner for speed and modern Xcode compatibility
+    # This permission is required for the action to create a GitHub Release
+    permissions:
+      contents: write
     outputs:
       zip-path: ${{ steps.create_zip.outputs.zip-path }}
     steps:
@@ -93,45 +99,32 @@ jobs:
           name: build-artifacts
           path: artifacts/
 
-  release:
-    needs:
-      - version
-      - build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download Build Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts
-          path: artifacts/
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "lts/*"
-
-      - name: Install semantic-release
-        # Using npx for cleaner execution
-        run: npm install semantic-release @semantic-release/exec @semantic-release/changelog @semantic-release/git
-
-      - name: Replace project.pbxproj
-        run: |
-          # This step replaces the updated version in the project file, ensuring the release commit contains the correct version number.
-          cp -f artifacts/project.pbxproj "Blue Switch.xcodeproj/project.pbxproj"
-
-      - name: Release
+      - name: Create or Update "latest" Release
         env:
+          # The GITHUB_TOKEN is automatically provided by Actions
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Use npx to run semantic-release from the local install
-          npx semantic-release
+          # Try to create the release. This will tag the current commit as "latest"
+          # If it fails (because "latest" tag/release already exists), it will exit with an error.
+          gh release create latest \
+            --title "Latest Build (main)" \
+            --notes "Automatic build from the main branch." \
+            --latest \
+            --prerelease=false \
+            --draft=false \
+            $GITHUB_OUTPUT \
+          || \
+          ( \
+            echo "Release 'latest' already exists. Re-creating..." && \
+            # Delete the existing release. This also deletes the "latest" tag.
+            gh release delete latest -y && \
+            # Re-create the release, which will tag the current commit as "latest"
+            gh release create latest \
+              --title "Latest Build (main)" \
+              --notes "Automatic build from the main branch." \
+              --latest \
+              --prerelease=false \
+              --draft=false \
+              $GITHUB_OUTPUT \
+          )
+          
